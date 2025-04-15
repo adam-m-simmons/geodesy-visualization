@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geodesy Education Path - Synced Outline & Tree (v4)</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        /* --- Material Inspired Variables --- */
+        :root {
+            --primary-color: #3f51b5; /* Indigo */
+            --primary-color-dark: #303f9f;
+            --accent-color: #ff4081; /* Pink */
+            --text-color-primary: #212121; /* Dark Grey */
+            --text-color-secondary: #757575; /* Medium Grey */
+            --text-on-primary: #ffffff; /* White */
+            --surface-color: #ffffff; /* White */
+            --background-color: #f5f5f5; /* Light Grey */
+            --border-color: #e0e0e0; /* Lighter Grey */
+            --hover-color: rgba(0, 0, 0, 0.04);
+            --button-hover-color: rgba(0, 0, 0, 0.08);
+            --app-bar-height: 56px; /* Standard Material height */
+            --sidebar-width: 35%;
+            --sidebar-min-width: 300px;
+            --sidebar-max-width: 450px;
+        }
+
+        /* --- Base Styles --- */
+        body, html {
+            font-family: 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
+            background-color: var(--background-color); color: var(--text-color-primary);
+            font-size: 14px; line-height: 1.5;
+        }
+        * { box-sizing: border-box; }
+
+        /* --- Layout Containers --- */
+        #page-container { /* Renamed from main-container for clarity */
+            display: flex;
+            flex-direction: column; /* Stack App Bar + Content */
+            height: 100vh;
+            width: 100%;
+        }
+        #app-bar {
+            height: var(--app-bar-height); padding: 0 24px; background-color: var(--primary-color);
+            color: var(--text-on-primary); display: flex; align-items: center; flex-shrink: 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 20; /* High z-index */
+        }
+        #app-bar h1 { display: block; font-size: 1.25em; font-weight: 500; margin: 0; white-space: nowrap; }
+        /* Search controls removed for simplicity in this version */
+
+        #content-area {
+            display: flex; /* Arrange Sidebar + Graph */
+            flex-grow: 1; /* Take remaining vertical space */
+            height: calc(100vh - var(--app-bar-height)); /* Calculate height */
+            overflow: hidden; /* Prevent content overflow */
+        }
+
+        /* --- Left Panel: Outline --- */
+        #left-panel {
+            width: var(--sidebar-width);
+            min-width: var(--sidebar-min-width); max-width: var(--sidebar-max-width);
+            height: 100%; border-right: 1px solid var(--border-color); display: flex; flex-direction: column;
+            background-color: var(--surface-color); box-shadow: 3px 0 6px rgba(0,0,0,0.05); z-index: 10;
+            flex-shrink: 0; /* Prevent shrinking */
+        }
+         #left-panel-header { /* Container for title and button */
+            padding: 0 24px;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+            background-color: var(--surface-color);
+        }
+         #left-panel-header h2 { /* Outline Title Header */
+            font-size: 1.1em; font-weight: 500; margin: 0;
+            height: 48px; line-height: 48px; /* Slightly shorter header */
+            text-align: left; color: var(--text-color-primary);
+         }
+         #resetButton { /* Reset Button Style */
+             display: block; /* Make it block level */
+             width: calc(100% - 16px); /* Full width minus some margin */
+             margin: 8px 8px 12px 8px; /* Add margin */
+             padding: 8px 16px;
+             font-size: 0.9em;
+             font-weight: 500;
+             text-transform: uppercase;
+             color: var(--primary-color);
+             background-color: transparent;
+             border: 1px solid var(--border-color);
+             border-radius: 4px;
+             cursor: pointer;
+             transition: background-color 0.2s ease;
+             text-align: center;
+         }
+         #resetButton:hover { background-color: var(--button-hover-color); }
+
+        #outline-container { flex-grow: 1; overflow-y: auto; padding: 8px 0; }
+        /* Expandable Section Styles */
+        .section { border-bottom: 1px solid var(--border-color); }
+        #outline-container > .section:last-child { border-bottom: none; }
+        .section-header { display: flex; align-items: center; padding: 10px 24px; cursor: pointer; transition: background-color 0.15s ease-in-out; position: relative; }
+        .section-header:hover { background-color: var(--hover-color); }
+        .section-header .title { font-weight: 500; flex-grow: 1; color: var(--text-color-primary); font-size: 0.95em;}
+        .section-header .indicator { margin-left: 16px; font-size: 1.1em; font-weight: bold; transition: transform 0.2s ease-in-out; color: var(--text-color-secondary); flex-shrink: 0; width: 1em; text-align: center; }
+        .section-header.expanded .indicator { transform: rotate(45deg); }
+        .section-content { display: none; padding: 8px 24px 16px 40px; background-color: #fafafa; border-top: 1px solid var(--border-color); }
+        .section-content.visible { display: block; }
+        .section-content .section { border-bottom: none; border-top: none; }
+        .section-content .section-header { padding: 6px 0; }
+        .section-content .section-content { padding: 6px 0 6px 20px; background-color: transparent; border-top: none;}
+        .outline-item { display: block; padding: 5px 0; margin-left: -16px; padding-left: 16px; font-size: 0.9em; color: var(--text-color-primary); cursor: pointer; transition: background-color 0.15s ease-in-out; border-radius: 4px; }
+        .outline-item.info-only { cursor: default; color: var(--text-color-secondary); }
+        .outline-item:not(.info-only):hover { background-color: var(--hover-color); }
+        .outline-highlighted { background-color: rgba(63, 81, 181, 0.15) !important; font-weight: 500;}
+
+        /* --- Right Panel: Graph Container --- */
+        #right-panel { flex-grow: 1; height: 100%; display: flex; flex-direction: column; min-width: 0; }
+        #graph-container { flex-grow: 1; position: relative; min-height: 0; background-color: var(--background-color); overflow: hidden; /* Hide scrollbars if SVG overflows slightly */ }
+        #tree-container { /* The SVG element */ width: 100%; height: 100%; }
+
+        /* --- D3 Tree Styles --- */
+        .link { fill: none; stroke: #aaa; stroke-width: 1.5px; opacity: 1; transition: stroke 0.3s, stroke-width 0.3s, opacity 0.3s; }
+        .node { cursor: pointer; }
+        .node circle { stroke-width: 1.5px; transition: stroke 0.3s, fill 0.3s, stroke-width 0.3s; }
+        .node text { font-size: 11px; fill: var(--text-color-primary); transition: fill 0.3s; }
+        .node--leaf circle { fill: #fff; stroke: steelblue; }
+        .node--internal circle { fill: steelblue; stroke: steelblue; }
+        .node--internalCollapsed circle { fill: lightsteelblue; stroke: steelblue; }
+        text { text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff; }
+        /* Highlighting Styles for D3 */
+        .node.highlighted circle { stroke: var(--accent-color); stroke-width: 3px; }
+        /* Target node gets special fill */
+         .node.target-highlight circle { fill: var(--accent-color); }
+        .node.highlighted text { fill: var(--primary-color-dark); font-weight: bold; }
+        .link.highlighted { stroke: var(--accent-color); stroke-width: 3px; opacity: 1;}
+        .node.faded { opacity: 0.3; } /* Fade node groups */
+        .link.faded { stroke: #eee; opacity: 0.5; }
+
+        /* --- Scrollbar Styling --- */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; } /* Slightly different track */
+        ::-webkit-scrollbar-thumb { background-color: #ccc; border-radius: 4px; border: 2px solid #f1f1f1; }
+        ::-webkit-scrollbar-thumb:hover { background-color: #bbb; }
+
+    </style>
+</head>
+<body>
+
+    <div id="page-container">
+        <div id="app-bar">
+             <h1>Geodesy Education Paths</h1>
+        </div>
+
+        <div id="content-area">
+
+            <div id="left-panel">
+                 <div id="left-panel-header">
+                     <h2>Outline</h2>
+                     <button id="resetButton">Reset Graph</button>
+                </div>
+                <div id="outline-container">
+                    <div class="section"> <div class="section-header" data-expands="hs-content"> <span class="title">I. High School Foundation</span> <span class="indicator">+</span> </div> <div class="section-content" id="hs-content"> <div class="section"> <div class="section-header" data-expands="hs-core-content"> <span class="title">A. Core Subjects (Essential)</span> <span class="indicator">+</span> </div> <div class="section-content" id="hs-core-content"> <div class="section"> <div class="section-header" data-expands="hs-math-content"> <span class="title">1. Mathematics</span> <span class="indicator">+</span> </div> <div class="section-content" id="hs-math-content"> <div class="outline-item" data-node-id="hs_alg">* Algebra I & II</div> <div class="outline-item" data-node-id="hs_geom">* Geometry</div> <div class="outline-item" data-node-id="hs_trig">* Trigonometry</div> <div class="outline-item" data-node-id="hs_calc">* Pre-Calc/Calculus (Highly Recommended)</div> </div> </div> <div class="outline-item" data-node-id="hs_phys">2. Physics</div> </div> </div> <div class="section"> <div class="section-header" data-expands="hs-rec-content"> <span class="title">B. Recommended Supporting Subjects</span> <span class="indicator">+</span> </div> <div class="section-content" id="hs-rec-content"> <div class="outline-item" data-node-id="hs_geog">1. Geography</div> <div class="outline-item" data-node-id="hs_cs">2. Computer Science / Programming</div> <div class="outline-item" data-node-id="hs_es">3. Earth Science</div> <div class="outline-item" data-node-id="hs_cad">4. Drafting / CAD</div> </div> </div> </div> </div>
+                     <div class="section"> <div class="section-header" data-expands="ug-content"> <span class="title">II. Undergraduate Studies (Bachelor's)</span> <span class="indicator">+</span> </div> <div class="section-content" id="ug-content"> <div class="section"> <div class="section-header" data-expands="ug-paths-content"> <span class="title">A. Common Degree Paths</span> <span class="indicator">+</span> </div> <div class="section-content" id="ug-paths-content"> <div class="outline-item" data-node-id="ug_path_geom">1. Geomatics / Geomatics Engineering</div> <div class="outline-item" data-node-id="ug_path_surv">2. Surveying / Surveying Eng. / Tech</div> <div class="outline-item" data-node-id="ug_path_civil">3. Civil Engineering (Geomatics focus)</div> <div class="outline-item" data-node-id="ug_path_geog">4. Geography (GIS/Geospatial focus)</div> <div class="outline-item" data-node-id="ug_path_es">5. Earth Sci. / Geosci. (Quant focus)</div> <div class="outline-item" data-node-id="ug_path_phys">6. Physics / Math (Applied focus)</div> <div class="outline-item" data-node-id="ug_path_geoinf">7. Geoinformatics</div> </div> </div> <div class="section"> <div class="section-header" data-expands="ug-accred-content"> <span class="title">B. Accreditation</span> <span class="indicator">+</span> </div> <div class="section-content" id="ug-accred-content"> <div class="outline-item info-only" data-node-id="ug_accred">1. ABET Accreditation (Important for Licensure)</div> </div> </div> <div class="section"> <div class="section-header" data-expands="ug-course-content"> <span class="title">C. Key Coursework Areas</span> <span class="indicator">+</span> </div> <div class="section-content" id="ug-course-content"> <div class="section"> <div class="section-header" data-expands="ug-advmath-content"> <span class="title">1. Advanced Mathematics</span> <span class="indicator">+</span> </div> <div class="section-content" id="ug-advmath-content"> <div class="outline-item" data-node-id="ug_calc_seq">* Calculus Sequence (I, II, III)</div> <div class="outline-item" data-node-id="ug_linalg">* Linear Algebra</div> <div class="outline-item" data-node-id="ug_diffeq">* Differential Equations</div> <div class="outline-item" data-node-id="ug_probstat">* Probability & Statistics</div> </div> </div> <div class="section"> <div class="section-header" data-expands="ug-phys-content"> <span class="title">2. Physics</span> <span class="indicator">+</span> </div> <div class="section-content" id="ug-phys-content"> <div class="outline-item" data-node-id="ug_phys_topics">* Calculus-based (Mechanics, Waves, Optics, E&M)</div> </div> </div> <div class="section"> <div class="section-header" data-expands="ug-coregeom-content"> <span class="title">3. Core Geomatics/Geodesy</span> <span class="indicator">+</span> </div> <div class="section-content" id="ug-coregeom-content"> <div class="outline-item" data-node-id="ug_survey">* Plane & Advanced Surveying</div> <div class="outline-item" data-node-id="ug_geodesy">* Geodesy / Geodetic Science</div> <div class="outline-item" data-node-id="ug_sat_geod">* Satellite Geodesy (GNSS/GPS)</div> <div class="outline-item" data-node-id="ug_photogram">* Photogrammetry</div> <div class="outline-item" data-node-id="ug_rs">* Remote Sensing</div> <div class="outline-item" data-node-id="ug_gis">* Geographic Information Systems (GIS)</div> <div class="outline-item" data-node-id="ug_map_proj">* Map Projections & Coordinate Systems</div> <div class="outline-item" data-node-id="ug_adjust">* Adjustment Computations (Least Squares)</div> <div class="outline-item" data-node-id="ug_boundary">* Boundary Control & Legal Principles</div> </div> </div> <div class="section"> <div class="section-header" data-expands="ug-comp-content"> <span class="title">4. Computational Skills</span> <span class="indicator">+</span> </div> <div class="section-content" id="ug-comp-content"> <div class="outline-item" data-node-id="ug_prog">* Programming (Python, MATLAB, C++)</div> <div class="outline-item" data-node-id="ug_cad_sw">* CAD Software (AutoCAD, MicroStation)</div> <div class="outline-item" data-node-id="ug_gis_sw">* GIS Software (ArcGIS, QGIS)</div> <div class="outline-item" data-node-id="ug_geod_sw">* Geodetic/Surveying Software</div> </div> </div> <div class="section"> <div class="section-header" data-expands="ug-support-content"> <span class="title">5. Supporting Engineering/Science</span> <span class="indicator">+</span> </div> <div class="section-content" id="ug-support-content"> <div class="outline-item" data-node-id="ug_eng_sci">* Statics, Dynamics, Hydrology, Geology, Env Sci</div> <div class="outline-item" data-node-id="ug_comm">* Technical Communication</div> </div> </div> </div> </div> </div> </div>
+                     <div class="section"> <div class="section-header" data-expands="grad-content"> <span class="title">III. Advanced Studies (Graduate)</span> <span class="indicator">+</span> </div> <div class="section-content" id="grad-content"> <div class="section"> <div class="section-header" data-expands="grad-purpose-content"> <span class="title">A. Purpose</span> <span class="indicator">+</span> </div> <div class="section-content" id="grad-purpose-content"> <div class="outline-item" data-node-id="grad_spec">1. Specialization</div> <div class="outline-item" data-node-id="grad_research">2. Research Roles</div> <div class="outline-item" data-node-id="grad_lead">3. Leadership / Project Management</div> <div class="outline-item" data-node-id="grad_comp">4. Enhanced Competitiveness</div> </div> </div> <div class="section"> <div class="section-header" data-expands="grad-fields-content"> <span class="title">B. Common Degree Fields</span> <span class="indicator">+</span> </div> <div class="section-content" id="grad-fields-content"> <div class="outline-item" data-node-id="grad_field_geom">1. Geomatics Engineering</div> <div class="outline-item" data-node-id="grad_field_geod">2. Geodesy / Geodetic Science</div> <div class="outline-item" data-node-id="grad_field_es">3. Earth Sciences</div> <div class="outline-item" data-node-id="grad_field_civil">4. Civil Engineering (Geomatics focus)</div> <div class="outline-item" data-node-id="grad_field_geoinf">5. Geoinformatics</div> </div> </div> <div class="section"> <div class="section-header" data-expands="grad-types-content"> <span class="title">C. Degree Types</span> <span class="indicator">+</span> </div> <div class="section-content" id="grad-types-content"> <div class="section"> <div class="section-header" data-expands="grad-ms-content"> <span class="title">1. Master of Science (M.S.)</span> <span class="indicator">+</span> </div> <div class="section-content" id="grad-ms-content"> <div class="outline-item" data-node-id="grad_ms_thesis">* Thesis-based (Research)</div> <div class="outline-item" data-node-id="grad_ms_non">* Non-thesis (Coursework)</div> </div> </div> <div class="outline-item" data-node-id="grad_meng">2. Master of Eng. (MEng - Practical)</div> <div class="section"> <div class="section-header" data-expands="grad-phd-content"> <span class="title">3. Doctor of Philosophy (Ph.D.)</span> <span class="indicator">+</span> </div> <div class="section-content" id="grad-phd-content"> <div class="outline-item" data-node-id="grad_phd_detail">* Original Research (Dissertation)</div> <div class="outline-item info-only">* Required for Academia/High-Level Research</div> </div> </div> </div> </div> <div class="section"> <div class="section-header" data-expands="grad-areas-content"> <span class="title">D. Areas of Specialization</span> <span class="indicator">+</span> </div> <div class="section-content" id="grad-areas-content"> <div class="outline-item" data-node-id="grad_area_sat">1. Satellite Geodesy & GNSS</div> <div class="outline-item" data-node-id="grad_area_phys">2. Physical Geodesy & Gravity Field</div> <div class="outline-item" data-node-id="grad_area_dyn">3. Geodynamics & Reference Frames</div> <div class="outline-item" data-node-id="grad_area_photo">4. Photogrammetry, Remote Sensing & LiDAR</div> <div class="outline-item" data-node-id="grad_area_gis">5. GIScience & Geoinformatics</div> <div class="outline-item" data-node-id="grad_area_surv">6. Surveying & Land Administration</div> <div class="outline-item" data-node-id="grad_area_hydro">7. Hydrographic Surveying & Ocean Mapping</div> <div class="outline-item" data-node-id="grad_area_inter">8. Interdisciplinary Applications (Climate, Hazards, etc.)</div> </div> </div> </div> </div>
+                </div></div><div id="right-panel">
+                <div id="graph-container">
+                     <svg id="tree-container"></svg> </div>
+            </div></div> </div> <script type="text/javascript">
+    // --- 1. Original Data (Nodes and Edges) ---
+    const originalNodesData = [ /* PASTE FULL NODE DATA HERE */
+        { id: 'root', label: 'Geodesy Education Path', group: 'root' },
+        { id: 'hs', label: 'High School Foundation', group: 'hs' }, { id: 'hs_core', label: 'Core Subjects (Essential)', group: 'hs' }, { id: 'hs_math', label: 'Mathematics', group: 'hs_subj' }, { id: 'hs_alg', label: 'Algebra I & II', group: 'hs_topic' }, { id: 'hs_geom', label: 'Geometry', group: 'hs_topic' }, { id: 'hs_trig', label: 'Trigonometry', group: 'hs_topic' }, { id: 'hs_calc', label: 'Pre-Calc/Calculus (Highly Recommended)', group: 'hs_topic' }, { id: 'hs_phys', label: 'Physics', group: 'hs_subj' }, { id: 'hs_rec', label: 'Recommended Supporting Subjects', group: 'hs' }, { id: 'hs_geog', label: 'Geography', group: 'hs_subj' }, { id: 'hs_cs', label: 'Computer Science / Programming', group: 'hs_subj' }, { id: 'hs_es', label: 'Earth Science', group: 'hs_subj' }, { id: 'hs_cad', label: 'Drafting / CAD', group: 'hs_subj' },
+        { id: 'ug', label: 'Undergraduate Studies (Bachelor\'s)', group: 'ug' }, { id: 'ug_paths', label: 'Common Degree Paths', group: 'ug' }, { id: 'ug_path_geom', label: 'Geomatics / Geomatics Eng.', group: 'ug_degree' }, { id: 'ug_path_surv', label: 'Surveying / Surveying Eng. / Tech', group: 'ug_degree' }, { id: 'ug_path_civil', label: 'Civil Eng. (Geomatics focus)', group: 'ug_degree' }, { id: 'ug_path_geog', label: 'Geography (GIS/Geospatial focus)', group: 'ug_degree' }, { id: 'ug_path_es', label: 'Earth Sci. / Geosci. (Quant focus)', group: 'ug_degree' }, { id: 'ug_path_phys', label: 'Physics / Math (Applied focus)', group: 'ug_degree' }, { id: 'ug_path_geoinf', label: 'Geoinformatics', group: 'ug_degree' }, { id: 'ug_accred', label: 'ABET Accreditation (Licensure)', group: 'ug_detail'}, { id: 'ug_course', label: 'Key Coursework Areas', group: 'ug' }, { id: 'ug_advmath', label: 'Advanced Mathematics', group: 'ug_course_cat' }, { id: 'ug_calc_seq', label: 'Calculus Sequence (I, II, III)', group: 'ug_course_topic' }, { id: 'ug_linalg', label: 'Linear Algebra', group: 'ug_course_topic' }, { id: 'ug_diffeq', label: 'Differential Equations', group: 'ug_course_topic' }, { id: 'ug_probstat', label: 'Probability & Statistics', group: 'ug_course_topic' }, { id: 'ug_phys', label: 'Physics (Calculus-based)', group: 'ug_course_cat' }, { id: 'ug_phys_topics', label: 'Mechanics, Waves, Optics, E&M', group: 'ug_course_topic' }, { id: 'ug_core_geom', label: 'Core Geomatics/Geodesy', group: 'ug_course_cat' }, { id: 'ug_survey', label: 'Plane & Advanced Surveying', group: 'ug_course_topic' }, { id: 'ug_geodesy', label: 'Geodesy / Geodetic Science', group: 'ug_course_topic' }, { id: 'ug_sat_geod', label: 'Satellite Geodesy (GNSS/GPS)', group: 'ug_course_topic' }, { id: 'ug_photogram', label: 'Photogrammetry', group: 'ug_course_topic' }, { id: 'ug_rs', label: 'Remote Sensing', group: 'ug_course_topic' }, { id: 'ug_gis', label: 'GIS', group: 'ug_course_topic' }, { id: 'ug_map_proj', label: 'Map Projections & Coord Systems', group: 'ug_course_topic' }, { id: 'ug_adjust', label: 'Adjustment Computations (Least Squares)', group: 'ug_course_topic' }, { id: 'ug_boundary', label: 'Boundary Control & Legal Principles', group: 'ug_course_topic' }, { id: 'ug_comp', label: 'Computational Skills', group: 'ug_course_cat' }, { id: 'ug_prog', label: 'Programming (Python, MATLAB, C++)', group: 'ug_course_topic' }, { id: 'ug_cad_sw', label: 'CAD Software (AutoCAD, MicroStation)', group: 'ug_course_topic' }, { id: 'ug_gis_sw', label: 'GIS Software (ArcGIS, QGIS)', group: 'ug_course_topic' }, { id: 'ug_geod_sw', label: 'Geodetic/Surveying Software', group: 'ug_course_topic' }, { id: 'ug_support', label: 'Supporting Engineering/Science', group: 'ug_course_cat' }, { id: 'ug_eng_sci', label: 'Statics, Dynamics, Hydrology, Geology, Env Sci', group: 'ug_course_topic' }, { id: 'ug_comm', label: 'Technical Communication', group: 'ug_course_topic' },
+        { id: 'grad', label: 'Advanced Studies (Graduate)', group: 'grad' }, { id: 'grad_purpose', label: 'Purpose', group: 'grad' }, { id: 'grad_spec', label: 'Specialization', group: 'grad_detail' }, { id: 'grad_research', label: 'Research Roles', group: 'grad_detail' }, { id: 'grad_lead', label: 'Leadership / Project Management', group: 'grad_detail' }, { id: 'grad_comp', label: 'Enhanced Competitiveness', group: 'grad_detail' }, { id: 'grad_fields', label: 'Common Degree Fields', group: 'grad' }, { id: 'grad_field_geom', label: 'Geomatics Engineering', group: 'grad_degree' }, { id: 'grad_field_geod', label: 'Geodesy / Geodetic Science', group: 'grad_degree' }, { id: 'grad_field_es', label: 'Earth Sciences', group: 'grad_degree' }, { id: 'grad_field_civil', label: 'Civil Eng. (Geomatics focus)', group: 'grad_degree' }, { id: 'grad_field_geoinf', label: 'Geoinformatics', group: 'grad_degree' }, { id: 'grad_types', label: 'Degree Types', group: 'grad' }, { id: 'grad_ms', label: 'Master of Science (M.S.)', group: 'grad_type' }, { id: 'grad_ms_thesis', label: 'Thesis-based (Research)', group: 'grad_subtype' }, { id: 'grad_ms_non', label: 'Non-thesis (Coursework)', group: 'grad_subtype' }, { id: 'grad_meng', label: 'Master of Eng. (MEng - Practical)', group: 'grad_type' }, { id: 'grad_phd', label: 'Doctor of Philosophy (Ph.D. - Research)', group: 'grad_type' }, { id: 'grad_phd_detail', label: 'Original Research (Dissertation), Academia/High-Level Research', group: 'grad_subtype'}, { id: 'grad_areas', label: 'Areas of Specialization', group: 'grad' }, { id: 'grad_area_sat', label: 'Satellite Geodesy & GNSS', group: 'grad_spec_area' }, { id: 'grad_area_phys', label: 'Physical Geodesy & Gravity', group: 'grad_spec_area' }, { id: 'grad_area_dyn', label: 'Geodynamics & Reference Frames', group: 'grad_spec_area' }, { id: 'grad_area_photo', label: 'Photogrammetry, RS & LiDAR', group: 'grad_spec_area' }, { id: 'grad_area_gis', label: 'GIScience & Geoinformatics', group: 'grad_spec_area' }, { id: 'grad_area_surv', label: 'Surveying & Land Admin', group: 'grad_spec_area' }, { id: 'grad_area_hydro', label: 'Hydrographic Surveying & Ocean Mapping', group: 'grad_spec_area' }, { id: 'grad_area_inter', label: 'Interdisciplinary Apps (Climate, Hazards)', group: 'grad_spec_area' }
+    ];
+    const originalEdgesData = [ // Ensure full edge data is pasted here
+        { from: 'root', to: 'hs' }, { from: 'root', to: 'ug' }, { from: 'root', to: 'grad' },
+        { from: 'hs', to: 'hs_core' }, { from: 'hs', to: 'hs_rec' }, { from: 'hs_core', to: 'hs_math' }, { from: 'hs_core', to: 'hs_phys' }, { from: 'hs_math', to: 'hs_alg' }, { from: 'hs_math', to: 'hs_geom' }, { from: 'hs_math', to: 'hs_trig' }, { from: 'hs_math', to: 'hs_calc' }, { from: 'hs_rec', to: 'hs_geog' }, { from: 'hs_rec', to: 'hs_cs' }, { from: 'hs_rec', to: 'hs_es' }, { from: 'hs_rec', to: 'hs_cad' },
+        { from: 'ug', to: 'ug_paths' }, { from: 'ug', to: 'ug_accred' }, { from: 'ug', to: 'ug_course' }, { from: 'ug_paths', to: 'ug_path_geom' }, { from: 'ug_paths', to: 'ug_path_surv' }, { from: 'ug_paths', to: 'ug_path_civil' }, { from: 'ug_paths', to: 'ug_path_geog' }, { from: 'ug_paths', to: 'ug_path_es' }, { from: 'ug_paths', to: 'ug_path_phys' }, { from: 'ug_paths', to: 'ug_path_geoinf' }, { from: 'ug_course', to: 'ug_advmath' }, { from: 'ug_course', to: 'ug_phys' }, { from: 'ug_course', to: 'ug_core_geom' }, { from: 'ug_course', to: 'ug_comp' }, { from: 'ug_course', to: 'ug_support' }, { from: 'ug_advmath', to: 'ug_calc_seq' }, { from: 'ug_advmath', to: 'ug_linalg' }, { from: 'ug_advmath', to: 'ug_diffeq' }, { from: 'ug_advmath', to: 'ug_probstat' }, { from: 'ug_phys', to: 'ug_phys_topics' }, { from: 'ug_core_geom', to: 'ug_survey' }, { from: 'ug_core_geom', to: 'ug_geodesy' }, { from: 'ug_core_geom', to: 'ug_sat_geod' }, { from: 'ug_core_geom', to: 'ug_photogram' }, { from: 'ug_core_geom', to: 'ug_rs' }, { from: 'ug_core_geom', to: 'ug_gis' }, { from: 'ug_core_geom', to: 'ug_map_proj' }, { from: 'ug_core_geom', to: 'ug_adjust' }, { from: 'ug_core_geom', to: 'ug_boundary' }, { from: 'ug_comp', to: 'ug_prog' }, { from: 'ug_comp', to: 'ug_cad_sw' }, { from: 'ug_comp', to: 'ug_gis_sw' }, { from: 'ug_comp', to: 'ug_geod_sw' }, { from: 'ug_support', to: 'ug_eng_sci' }, { from: 'ug_support', to: 'ug_comm' },
+        { from: 'grad', to: 'grad_purpose' }, { from: 'grad', to: 'grad_fields' }, { from: 'grad', to: 'grad_types' }, { from: 'grad', to: 'grad_areas' }, { from: 'grad_purpose', to: 'grad_spec' }, { from: 'grad_purpose', to: 'grad_research' }, { from: 'grad_purpose', to: 'grad_lead' }, { from: 'grad_purpose', to: 'grad_comp' }, { from: 'grad_fields', to: 'grad_field_geom' }, { from: 'grad_fields', to: 'grad_field_geod' }, { from: 'grad_fields', to: 'grad_field_es' }, { from: 'grad_fields', to: 'grad_field_civil' }, { from: 'grad_fields', to: 'grad_field_geoinf' }, { from: 'grad_types', to: 'grad_ms' }, { from: 'grad_types', to: 'grad_meng' }, { from: 'grad_types', to: 'grad_phd' }, { from: 'grad_ms', to: 'grad_ms_thesis' }, { from: 'grad_ms', to: 'grad_ms_non' }, { from: 'grad_phd', to: 'grad_phd_detail' }, { from: 'grad_areas', to: 'grad_area_sat' }, { from: 'grad_areas', to: 'grad_area_phys' }, { from: 'grad_areas', to: 'grad_area_dyn' }, { from: 'grad_areas', to: 'grad_area_photo' }, { from: 'grad_areas', to: 'grad_area_gis' }, { from: 'grad_areas', to: 'grad_area_surv' }, { from: 'grad_areas', to: 'grad_area_hydro' }, { from: 'grad_areas', to: 'grad_area_inter' }
+    ];
+
+    // --- Global Variables ---
+    let d3RootNode;
+    let nodeMapD3 = {};
+    let svg, g, treeLayout, zoomBehavior;
+    let width, height, innerWidth, innerHeight;
+    const margin = { top: 30, right: 150, bottom: 30, left: 150 };
+    const duration = 500; // Animation duration
+    let nodeCounter = 0; // Unique node ID counter for D3
+    let highlightedPathNodes = new Set();
+    let highlightedPathEdges = new Set();
+    let highlightedTargetNodes = new Set();
+    let initialTransform; // Store the initial transform
+
+    // --- DOM References ---
+    const graphContainer = document.getElementById('graph-container');
+    const outlineContainer = document.getElementById('outline-container');
+    const resetButton = document.getElementById('resetButton'); // Get reset button
+
+
+    // --- 2. Data Transformation for D3 ---
+    function buildHierarchy(nodesData, edgesData) {
+         const nodesById = {};
+         if (!nodesData || !edgesData) { console.error("Data arrays are missing!"); return null; }
+         if (nodesData.length === 0) { console.error("Node data array is empty!"); return null; }
+         nodesData.forEach(node => {
+             if (!node || typeof node.id === 'undefined' || typeof node.label === 'undefined') { console.warn("Skipping invalid node data:", node); return; }
+             nodesById[node.id] = { name: node.label, id: node.id, children: [] };
+         });
+         edgesData.forEach(edge => {
+             if (!edge || typeof edge.from === 'undefined' || typeof edge.to === 'undefined') { console.warn("Skipping invalid edge data:", edge); return; }
+             if (nodesById[edge.from] && nodesById[edge.to]) { nodesById[edge.from].children.push(nodesById[edge.to]); }
+             else { console.warn(`Edge references non-existent node: ${edge.from} -> ${edge.to}`); }
+         });
+         if (!nodesById['root']) { console.error("Root node with id 'root' not found!"); return null; }
+         return nodesById['root'];
+    }
+
+    // --- 3. D3 Setup & Initialization ---
+    function initializeChart() {
+        console.log("Initializing Chart...");
+        try {
+            // Calculate Dimensions
+            width = graphContainer.clientWidth;
+            height = graphContainer.clientHeight;
+            if (!width || !height || width <= 0 || height <=0 ) { throw new Error("Graph container invalid dimensions."); }
+            innerWidth = width - margin.left - margin.right;
+            innerHeight = height - margin.top - margin.bottom;
+            if (innerWidth <= 0 || innerHeight <= 0) {
+                 // Attempt to provide a minimum size instead of erroring out
+                 console.warn("Calculated inner dimensions zero or negative. Using minimums.");
+                 innerWidth = Math.max(100, innerWidth); // Min width for layout
+                 innerHeight = Math.max(100, innerHeight); // Min height for layout
+            }
+            console.log(`Dimensions: W=${width}, H=${height}, IW=${innerWidth}, IH=${innerHeight}`);
+
+            // Build Hierarchy
+            const hierarchicalData = buildHierarchy(originalNodesData, originalEdgesData);
+            if (!hierarchicalData) { throw new Error("Failed to build hierarchical data."); }
+            d3RootNode = d3.hierarchy(hierarchicalData);
+            nodeMapD3 = {};
+            d3RootNode.each(d => { nodeMapD3[d.data.id] = d; });
+
+            d3RootNode.x0 = innerHeight / 2; // Start root centered vertically in layout space
+            d3RootNode.y0 = 0; // Start root at left of layout space
+
+            // Clear previous SVG content
+             d3.select("#tree-container").selectAll("*").remove();
+
+            // Create SVG and main group
+            svg = d3.select("#tree-container")
+                .attr("width", width).attr("height", height)
+                .attr("viewBox", [0, 0, width, height]);
+
+            g = svg.select("g.main-group"); // Select first
+            if (g.empty()) { g = svg.append("g").attr("class", "main-group"); } // Append if doesn't exist
+            // Apply margin transform *relative to SVG origin*
+            g.attr("transform", `translate(${margin.left},${margin.top})`);
+
+            // Create Tree Layout
+            treeLayout = d3.tree().size([innerHeight, innerWidth]); // Use calculated inner dimensions
+
+            // Collapse initial nodes
+            if (d3RootNode.children) {
+                d3RootNode.children.forEach(child => { if(child.children) collapse(child); });
+            }
+
+            // Initial Draw
+            update(d3RootNode);
+            console.log("Initial D3 tree drawn.");
+
+             // Setup Zoom
+             if (!zoomBehavior) {
+                zoomBehavior = d3.zoom()
+                    .scaleExtent([0.1, 5])
+                    .on('zoom', (event) => { if(g) g.attr('transform', event.transform); });
+                 svg.call(zoomBehavior);
+             }
+
+             // Apply and Store Initial Transform
+             setTimeout(() => {
+                 if (!svg || !zoomBehavior) return;
+                 const initialScale = Math.min(0.8, innerWidth / (Math.max(1,d3RootNode.height) * 200));
+                 const safeScale = Math.max(0.1, initialScale);
+                 // Calculate translation to center the root *within the G element*
+                 // Root's layout position is (x=innerHeight/2, y=0)
+                 // We want this to map to roughly (x=50, y=innerHeight/2) within the G element's coordinate space
+                 const initialTranslateX = 50; // Indent root slightly from left margin
+                 const initialTranslateY = innerHeight / 2; // Center root vertically in layout space
+
+                 // Combine G's margin transform with the desired zoom transform
+                 initialTransform = d3.zoomIdentity
+                     .translate(margin.left + initialTranslateX, margin.top + initialTranslateY) // Add margins to translation
+                     .scale(safeScale)
+                     // Translate back so root's y=0 is at initialTranslateX
+                     .translate(-0 * safeScale, -d3RootNode.x0 * safeScale); // Adjust based on root's initial pos
+                 // Re-calculate Y translation to precisely center root's x0 position
+                 const preciseTranslateY = height / 2 - (d3RootNode.x0 * safeScale); // Center in SVG height
+                 initialTransform = d3.zoomIdentity.translate(margin.left + 50, preciseTranslateY).scale(safeScale);
+
+
+                 svg.call(zoomBehavior.transform, initialTransform); // Apply the calculated transform
+                 console.log("Initial zoom applied:", initialTransform);
+             }, 150);
+
+        } catch (error) {
+            console.error("Error during chart initialization:", error);
+            graphContainer.innerHTML = `<p style='padding: 20px; color: red;'>Chart Initialization Error: ${error.message}</p>`;
+        }
+    } // End initializeChart
+
+
+    // --- 4. D3 Update function, Click Handler, Helpers ---
+    function diagonal(s, d) {
+         const path = d3.linkHorizontal().x(nd => nd.y).y(nd => nd.x)({source: s, target: d}); return path;
+     }
+    function collapse(d) {
+        if (d.children) { d._children = d.children; d._children.forEach(collapse); d.children = null; }
+    }
+    function click(event, d) { // Click on D3 node
+         outlineContainer.querySelectorAll('.outline-highlighted').forEach(el => el.classList.remove('outline-highlighted'));
+         highlightedPathNodes.clear(); highlightedPathEdges.clear(); highlightedTargetNodes.clear();
+
+         if (d.children || d._children) {
+            if (d.children) { d._children = d.children; d.children = null; }
+            else { d.children = d._children; d._children = null; }
+            update(d);
+         } else {
+              applyHighlightStyles(); // Reset styles if leaf clicked
+         }
+     }
+    function update(source) {
+        if (!d3RootNode || !g || !treeLayout) { console.error("Update called before D3 setup is complete."); return; }
+        console.log("D3 Update called. Source data ID:", source?.data?.id || 'N/A');
+
+        const treeData = treeLayout(d3RootNode);
+        const nodes = treeData.descendants();
+        const links = treeData.links();
+        const nodeHorizontalSpacing = Math.max(180, innerWidth / (Math.max(1, d3RootNode.height) + 1));
+        nodes.forEach(d => { d.y = d.depth * nodeHorizontalSpacing; });
+
+        const transition = svg.transition().duration(duration);
+
+        // NODES
+        const node = g.selectAll('g.node').data(nodes, d => d.id || (d.id = ++nodeCounter));
+        const nodeEnter = node.enter().append('g').attr('class', 'node')
+            .classed('node--internal', d => d.data.children?.length > 0 || d._children?.length > 0)
+            .classed('node--internalCollapsed', d => !!d._children)
+            .classed('node--leaf', d => !d.children && !d._children)
+            .attr("transform", d => `translate(${source.y0 || d3RootNode.y0},${source.x0 || d3RootNode.x0})`)
+            .on('click', click)
+            .style('opacity', 1e-6);
+        nodeEnter.append('circle').attr('r', 1e-6);
+        nodeEnter.append('text').attr("dy", ".35em").text(d => d.data.name).style("fill-opacity", 1e-6);
+
+        const nodeUpdate = nodeEnter.merge(node);
+        nodeUpdate.transition(transition)
+            .attr("transform", d => `translate(${d.y},${d.x})`)
+            .style('opacity', 1);
+        nodeUpdate.select('circle').transition(transition).attr('r', 6)
+            .style("fill", d => d._children ? "lightsteelblue" : (d.children ? "steelblue" : "#fff"))
+            .attr("stroke", "steelblue");
+        nodeUpdate.select('text').transition(transition)
+            .attr("x", d => d.children || d._children ? -13 : 13)
+            .attr("text-anchor", d => d.children || d._children ? "end" : "start")
+            .style("fill-opacity", 1);
+        nodeUpdate
+            .classed('node--internal', d => d.children || d._children)
+            .classed('node--internalCollapsed', d => !!d._children)
+            .classed('node--leaf', d => !d.children && !d._children);
+
+        const nodeExit = node.exit().transition(transition)
+            .attr("transform", d => `translate(${source.y},${source.x})`)
+            .style('opacity', 1e-6).remove();
+        nodeExit.select('circle').attr('r', 1e-6);
+        nodeExit.select('text').style('fill-opacity', 1e-6);
+
+        // LINKS
+        const link = g.selectAll('path.link').data(links, d => d.target.id);
+        const linkEnter = link.enter().insert('path', "g").attr("class", "link")
+            .attr('d', d => { const o = {x: source.x0 || d3RootNode.x0, y: source.y0 || d3RootNode.y0}; return diagonal(o, o); })
+            .style('opacity', 1e-6);
+        const linkUpdate = linkEnter.merge(link);
+        linkUpdate.transition(transition).attr('d', d => diagonal(d.source, d.target)).style('opacity', 1);
+        link.exit().transition(transition).attr('d', d => { const o = {x: source.x, y: source.y}; return diagonal(o, o); })
+            .style('opacity', 1e-6).remove();
+
+        nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
+
+        // Apply highlight styles AFTER the transition
+        setTimeout(applyHighlightStyles, duration + 50); // Add slight buffer
+    }
+
+    // --- 5. Outline Interaction & Highlighting ---
+    function applyHighlightStyles() {
+         if (!g) return;
+         console.log("Applying highlight styles. Path nodes:", highlightedPathNodes.size);
+         // Ensure 'g' exists before selecting within it
+         const nodesSelection = g.selectAll('.node');
+         const linksSelection = g.selectAll('.link');
+
+         nodesSelection.classed('highlighted', false).classed('target-highlight', false).classed('faded', false);
+         linksSelection.classed('highlighted', false).classed('faded', false);
+
+         if (highlightedPathNodes.size === 0) return; // Nothing to highlight
+
+         nodesSelection
+            .classed('faded', d => !highlightedPathNodes.has(d.id))
+            .classed('highlighted', d => highlightedPathNodes.has(d.id))
+            .classed('target-highlight', d => highlightedTargetNodes.has(d.data.id));
+         linksSelection
+            .classed('faded', d => !highlightedPathEdges.has(d.target.id))
+            .classed('highlighted', d => highlightedPathEdges.has(d.target.id));
+
+         // Special fill for target node's circle
+         nodesSelection.filter('.target-highlight').select('circle').style('fill', 'var(--accent-color)');
+     }
+
+    function highlightD3Path(targetNodeId) {
+        console.log("Highlighting D3 path for:", targetNodeId);
+        const targetNode = nodeMapD3[targetNodeId];
+        if (!targetNode) { console.error("Target node not found:", targetNodeId); highlightedPathNodes.clear(); highlightedPathEdges.clear(); highlightedTargetNodes.clear(); applyHighlightStyles(); return; }
+
+        // Expand Path
+        let ancestors = targetNode.ancestors();
+        ancestors.forEach(node => { if (node._children) { node.children = node._children; node._children = null; } });
+
+        // Reset and Calculate Path Sets
+        highlightedPathNodes.clear(); highlightedPathEdges.clear(); highlightedTargetNodes.clear();
+        highlightedTargetNodes.add(targetNodeId);
+        // Re-get ancestors *after* potential expansion changes? Should be same.
+        ancestors = targetNode.ancestors();
+        ancestors.forEach(d => highlightedPathNodes.add(d.id));
+        ancestors.slice(1).forEach(d => highlightedPathEdges.add(d.id));
+
+        // Update D3 Tree - Styles applied via applyHighlightStyles after transition
+        update(d3RootNode); // Update from root
+
+        // Focus after update transition finishes
+        setTimeout(() => { centerNode(targetNode); }, duration + 100);
+    }
+
+    function centerNode(source) {
+        if (!zoomBehavior || !source || !svg || !svg.node() || !g) return; // Add G check
+        try {
+            const currentTransform = d3.zoomTransform(svg.node()); const scale = currentTransform.k;
+            const viewerWidth = graphContainer.clientWidth; const viewerHeight = graphContainer.clientHeight;
+            if (typeof source.x === 'undefined' || typeof source.y === 'undefined') { console.warn("Cannot center node, coordinates missing:", source.data.id); return; }
+            // Calculate translation needed in the coordinate system of the main 'g' element
+            let targetX_g = source.y; // Target's position within g
+            let targetY_g = source.x;
+            // Calculate the translation needed for the SVG's zoom transform
+            // to bring the target node (in g's coords) to the center of the SVG viewport
+            let translateX = (viewerWidth / 2) - (margin.left + targetX_g) * scale;
+            let translateY = (viewerHeight / 2) - (margin.top + targetY_g) * scale;
+
+            // Apply the new zoom transform
+            svg.transition().duration(duration)
+               .call(zoomBehavior.transform, d3.zoomIdentity.translate(translateX, translateY).scale(scale));
+
+        } catch (error) { console.error("Error during centering:", error); }
+     }
+
+    // --- 6. Reset Function ---
+    function resetGraph() {
+        console.log("Resetting graph...");
+        outlineContainer.querySelectorAll('.outline-highlighted').forEach(el => el.classList.remove('outline-highlighted'));
+        highlightedPathNodes.clear(); highlightedPathEdges.clear(); highlightedTargetNodes.clear();
+
+        if (d3RootNode && d3RootNode.children) {
+            // Recursively collapse children of root's direct children
+            d3RootNode.children.forEach(child => { if(child.children) collapse(child); });
+        } else if (d3RootNode && d3RootNode._children) {
+            // If root itself was somehow collapsed (shouldn't happen if we start expanded)
+             d3RootNode.children = d3RootNode._children;
+             d3RootNode._children = null;
+             if (d3RootNode.children) {
+                 d3RootNode.children.forEach(child => { if(child.children) collapse(child); });
+             }
+        }
+
+        if (d3RootNode) update(d3RootNode); // Update display
+
+        // Reset zoom/pan to initial state
+        if (svg && zoomBehavior && initialTransform) {
+             svg.transition().duration(duration).call(zoomBehavior.transform, initialTransform);
+        } else if (svg && zoomBehavior) {
+             svg.transition().duration(duration).call(zoomBehavior.transform, d3.zoomIdentity); // Fallback reset
+        }
+        console.log("Graph reset complete.");
+    }
+
+    // --- Event Handlers ---
+    if(resetButton) { resetButton.addEventListener('click', resetGraph); }
+    else { console.error("Reset button not found"); }
+
+    // Combined Outline Click Listener
+     outlineContainer.addEventListener('click', (event) => {
+        const header = event.target.closest('.section-header');
+        const item = event.target.closest('.outline-item');
+
+        if (item && item.hasAttribute('data-node-id') && !item.classList.contains('info-only')) {
+             event.stopPropagation();
+            const nodeId = item.getAttribute('data-node-id');
+            if (nodeId && nodeMapD3[nodeId]) {
+                console.log("Outline item clicked:", nodeId);
+                highlightD3Path(nodeId);
+                outlineContainer.querySelectorAll('.outline-highlighted').forEach(el => el.classList.remove('outline-highlighted'));
+                item.classList.add('outline-highlighted');
+            } else { console.warn("Clicked outline item node ID not found in D3 data:", nodeId); }
+        } else if (header && header.hasAttribute('data-expands') && !event.target.closest('.outline-item')) {
+            const contentId = header.getAttribute('data-expands');
+            const contentElement = document.getElementById(contentId);
+            const indicator = header.querySelector('.indicator');
+            if (contentElement) {
+                header.classList.toggle('expanded');
+                contentElement.classList.toggle('visible');
+                if (indicator) indicator.textContent = header.classList.contains('expanded') ? '-' : '+';
+            }
+        }
+    });
+
+
+    // --- Initial Load & Resize ---
+    document.addEventListener("DOMContentLoaded", () => {
+         console.log("DOM Loaded. Initializing chart...");
+         if (typeof requestAnimationFrame === 'function') { requestAnimationFrame(initializeChart); }
+         else { setTimeout(initializeChart, 0); }
+    });
+
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+             console.log("Resizing...");
+             // Only re-initialize if necessary - could just update dimensions and redraw
+              if(svg && g && treeLayout) { // Check if D3 elements exist
+                 width = graphContainer.clientWidth;
+                 height = graphContainer.clientHeight;
+                 innerWidth = width - margin.left - margin.right;
+                 innerHeight = height - margin.top - margin.bottom;
+                 if (innerWidth <= 0 || innerHeight <= 0) return; // Skip if dimensions invalid
+
+                 svg.attr("width", width).attr("height", height).attr("viewBox", [0, 0, width, height]);
+                 treeLayout.size([innerHeight, innerWidth]);
+                 // Recalculate layout and update positions without resetting collapse state
+                 if (d3RootNode) {
+                      update(d3RootNode); // Call update to adjust layout
+                      // Optionally re-apply initial centering logic if desired on resize
+                      // centerNode(d3RootNode); // Or apply initialTransform
+                 }
+             } else {
+                 initializeChart(); // Fallback: Full re-initialization
+             }
+         }, 250);
+     });
+
+    console.log("Script loaded, awaiting DOMContentLoaded.");
+
+</script>
+
+</body>
+</html>
